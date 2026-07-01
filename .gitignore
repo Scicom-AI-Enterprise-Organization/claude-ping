@@ -1,0 +1,8 @@
+# local, host-specific config (copy claude-ping.example.json -> claude-ping.json)
+claude-ping.json
+.env
+*.log
+
+# built binaries
+/claude-ping
+/dist/

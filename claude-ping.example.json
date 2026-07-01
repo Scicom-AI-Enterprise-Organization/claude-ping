@@ -1,0 +1,26 @@
+{
+  "host": "1.2.3.4",
+  "port": 22,
+  "user": "root",
+  "key": "~/.ssh/id_rsa",
+
+  "remote_dir": "/path/on/remote/repo",
+  "local_dir": ".",
+
+  "train_log": "/path/on/remote/repo/train.log",
+  "status_json": "/path/on/remote/repo/out/status.json",
+
+  "launch_cmd": "cd /path/on/remote/repo && nohup bash run.sh > train.log 2>&1 & echo started pid $!",
+  "bootstrap_cmd": "bash /path/on/remote/repo/bootstrap.sh 2>&1 | tee bootstrap.log",
+
+  "sync_excludes": [".git", ".venv", "__pycache__", "*.pyc", "node_modules", "data", "*.ckpt", "*.pt", "*.bin", "*.zip"],
+
+  "monitor": {
+    "wandb_project": "my_project",
+    "wandb_run": "run-name",
+    "wandb_entity": null,
+    "metric": "val/loss",
+    "hf_repo": "org/model-repo",
+    "hf_files": ["last.ckpt", "pytorch_model.bin"]
+  }
+}
