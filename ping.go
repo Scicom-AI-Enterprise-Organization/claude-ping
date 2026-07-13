@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -185,7 +186,10 @@ func (d *driver) sync() error {
 	}
 	fmt.Printf("[claude-ping] rsync %s -> %s:%s\n", d.cfg.LocalDir, d.hostspec, d.cfg.RemoteDir)
 	rsh := "ssh " + strings.Join(d.sshOpts, " ")
-	args := []string{"-az", "--delete", "-e", rsh}
+	// --no-owner/--no-group/--no-perms: container/overlay filesystems (e.g.
+	// RunPod pods) reject chown/chmod, which turns every -a sync into rsync
+	// exit 23 even though all file data transferred fine.
+	args := []string{"-az", "--no-owner", "--no-group", "--no-perms", "--delete", "-e", rsh}
 	for _, e := range d.cfg.SyncExcludes {
 		args = append(args, "--exclude", e)
 	}
@@ -195,7 +199,16 @@ func (d *driver) sync() error {
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		return cmd.Run()
+		err := cmd.Run()
+		// rsync 23 = partial transfer (attrs/some files), 24 = source files
+		// vanished mid-sync. Everything that could be copied WAS copied —
+		// warn instead of failing (a retry would just repeat the warning).
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && (ee.ExitCode() == 23 || ee.ExitCode() == 24) {
+			fmt.Fprintf(os.Stderr, "[claude-ping] rsync exit %d (partial-transfer warning, e.g. chown on container fs) — treated as success\n", ee.ExitCode())
+			return nil
+		}
+		return err
 	})
 }
 
