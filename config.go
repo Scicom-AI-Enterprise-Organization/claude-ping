@@ -15,17 +15,19 @@ import (
 // (CLAUDE_PING_CONFIG, then ./claude-ping.json, then <exedir>/claude-ping.json) >
 // built-in defaults.
 type Config struct {
-	Host         string
-	Port         string
-	User         string
-	Key          string
-	RemoteDir    string
-	LocalDir     string
-	TrainLog     string
-	StatusJSON   string
-	LaunchCmd    string
-	BootstrapCmd string
-	SyncExcludes []string
+	Host          string
+	Port          string
+	User          string
+	Key           string
+	RemoteDir     string
+	LocalDir      string
+	TrainLog      string
+	StatusJSON    string
+	LaunchCmd     string
+	BootstrapCmd  string
+	SyncExcludes  []string
+	SecretKeys    []string
+	RemoteEnvFile string
 
 	Monitor MonitorConfig
 
@@ -128,6 +130,15 @@ func LoadConfig() Config {
 
 	c.SyncExcludes = mapStrSlice(cfg, "sync_excludes", defaultSyncExcludes)
 
+	c.SecretKeys = mapStrSlice(cfg, "secret_keys", nil)
+	if v := os.Getenv("PING_SECRET_KEYS"); v != "" {
+		c.SecretKeys = splitComma(v)
+	}
+	c.RemoteEnvFile = g("remote_env_file", "PING_REMOTE_ENV_FILE", "")
+	if c.RemoteEnvFile == "" && c.RemoteDir != "" {
+		c.RemoteEnvFile = c.RemoteDir + "/.env"
+	}
+
 	if mon, ok := cfg["monitor"].(map[string]any); ok {
 		c.Monitor = MonitorConfig{
 			WandbProject: mapStr(mon, "wandb_project"),
@@ -185,6 +196,17 @@ func mapStrSlice(m map[string]any, key string, def []string) []string {
 	for _, e := range arr {
 		if s, ok := e.(string); ok {
 			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// splitComma splits a comma-separated list, trimming spaces and dropping empties.
+func splitComma(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
 		}
 	}
 	return out

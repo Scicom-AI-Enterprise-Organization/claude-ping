@@ -42,9 +42,9 @@ func runMonitor(cfg MonitorConfig, args []string) error {
 	return nil
 }
 
-// loadDotenv loads .env from the cwd or the executable's dir (first found) without
-// overriding variables already present in the environment (setdefault semantics).
-func loadDotenv() {
+// dotenvPairs reads .env from the cwd or the executable's dir (first found) and
+// returns its key/value pairs in file order. A missing .env yields nil.
+func dotenvPairs() [][2]string {
 	dirs := []string{}
 	if wd, err := os.Getwd(); err == nil {
 		dirs = append(dirs, wd)
@@ -58,17 +58,26 @@ func loadDotenv() {
 		if err != nil {
 			continue
 		}
+		var pairs [][2]string
 		for _, line := range strings.Split(string(data), "\n") {
 			line = strings.TrimSpace(line)
 			if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
 				continue
 			}
 			k, v, _ := strings.Cut(line, "=")
-			k, v = strings.TrimSpace(k), strings.TrimSpace(v)
-			if _, ok := os.LookupEnv(k); !ok {
-				_ = os.Setenv(k, v)
-			}
+			pairs = append(pairs, [2]string{strings.TrimSpace(k), strings.TrimSpace(v)})
 		}
-		return
+		return pairs
+	}
+	return nil
+}
+
+// loadDotenv loads .env into the process environment without overriding variables
+// already present (setdefault semantics).
+func loadDotenv() {
+	for _, kv := range dotenvPairs() {
+		if _, ok := os.LookupEnv(kv[0]); !ok {
+			_ = os.Setenv(kv[0], kv[1])
+		}
 	}
 }

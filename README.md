@@ -18,13 +18,32 @@ returns immediately.
 
 ## Install
 
+### Download a prebuilt binary
+
+Grab the latest release for your platform (Linux amd64/arm64, macOS arm64) from the
+[Releases page](https://github.com/Scicom-AI-Enterprise-Organization/claude-ping/releases),
+or via `curl`:
+
+```bash
+REPO=Scicom-AI-Enterprise-Organization/claude-ping
+VER=v0.1.0                          # latest tag
+BIN=claude-ping-darwin-arm64        # pick: linux-amd64 | linux-arm64 | darwin-arm64
+base="https://github.com/$REPO/releases/download/$VER"
+curl -fsSLO "$base/$BIN"
+curl -fsSLO "$base/$BIN.sha256"
+sha256sum -c "$BIN.sha256"          # macOS: shasum -a 256 -c "$BIN.sha256"
+chmod +x "$BIN" && mv "$BIN" claude-ping
+```
+
+### Build from source
+
 ```bash
 make            # build ./claude-ping for this machine
 make install    # or install to $GOBIN
 make linux      # cross-compile dist/claude-ping-linux-amd64 for the remote box
 ```
 
-Requires Go 1.26+. No third-party modules.
+Requires Go 1.26+. No third-party modules. `claude-ping version` prints the build.
 
 ## Configure
 
@@ -44,6 +63,7 @@ claude-ping logs 200           # last 200 lines of the log file (one-shot — re
 claude-ping status             # cat the heartbeat status.json
 claude-ping gpu                # one-shot nvidia-smi summary
 claude-ping sync               # rsync local_dir -> remote_dir (same tunnel)
+claude-ping env-sync           # push secrets/env (secret_keys or local .env) to the remote
 claude-ping launch             # run the configured launch_cmd in the background
 claude-ping bootstrap          # run the configured bootstrap_cmd
 claude-ping down               # close the master when done
@@ -54,6 +74,27 @@ claude-ping heartbeat              # remote-side: write status.json every N seco
 
 `follow` (blocking `tail -f`) and `shell` (interactive) are for **humans**, not agents —
 agents should poll the one-shot verbs above.
+
+## Sync secrets / env to the remote
+
+Push API keys and other environment variables to the remote box over the same tunnel,
+so a `launch_cmd` / `bootstrap_cmd` can `source` them. Values are fed over **stdin, never
+the command line**, and land in a file with mode `600`:
+
+```bash
+claude-ping env-sync
+```
+
+- **Which vars** — the `secret_keys` list in `claude-ping.json` (or `PING_SECRET_KEYS`,
+  comma-separated). Leave it empty to sync *every* key in your local `.env`.
+- **Where each value comes from** — your shell environment first, falling back to a local
+  `.env` (cwd or the binary's dir — copy `.env.example` to `.env`).
+- **Destination** — `remote_env_file`, defaulting to `<remote_dir>/.env`.
+
+```bash
+# no config file needed — pick the vars inline:
+PING_SECRET_KEYS=WANDB_API_KEY,HF_TOKEN claude-ping env-sync
+```
 
 ## Remote heartbeat
 
@@ -75,3 +116,7 @@ takes defaults from the `monitor` block of `claude-ping.json`:
 claude-ping monitor --project P --run R --repo org/name --metric val/loss --history 8
 claude-ping monitor --files config.json,model.safetensors
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE).

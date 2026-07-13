@@ -52,7 +52,8 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           out="claude-ping-${{ matrix.goos }}-${{ matrix.goarch }}"
-          go build -trimpath -ldflags "-s -w" -o "dist/$out" .
+          version="${{ github.ref_type == 'tag' && github.ref_name || format('dev-{0}', github.sha) }}"
+          go build -trimpath -ldflags "-s -w -X main.version=$version" -o "dist/$out" .
           (cd dist && sha256sum "$out" > "$out.sha256")
       - uses: actions/upload-artifact@v4
         with:

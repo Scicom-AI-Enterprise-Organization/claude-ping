@@ -77,6 +77,7 @@ file with `CLAUDE_PING_CONFIG=/path/to.json`.
 ./claude-ping status             # cat the heartbeat status.json
 ./claude-ping gpu                # one-shot nvidia-smi summary
 ./claude-ping sync               # rsync local_dir -> remote_dir (same tunnel)
+./claude-ping env-sync           # push secrets/env (secret_keys or .env) to remote_env_file (600)
 ./claude-ping launch             # run the configured launch_cmd in the background
 ./claude-ping bootstrap          # run the configured bootstrap_cmd
 ./claude-ping down               # close the master when done
@@ -107,7 +108,7 @@ and self-exits once the watched process has been seen and is then gone.
 |---|---|
 | `main.go` | CLI dispatch + usage |
 | `config.go` | resolve config (env `PING_*` > `claude-ping.json` > defaults) |
-| `ping.go` | persistent-SSH driver (`up/check/exec/logs/status/gpu/sync/launch/bootstrap/shell/follow/down`) |
+| `ping.go` | persistent-SSH driver (`up/check/exec/logs/status/gpu/sync/env-sync/launch/bootstrap/shell/follow/down`) |
 | `heartbeat.go` | remote-side: write `status.json` (GPU/ckpt/log/disk) every N seconds |
 | `hf.go` / `wandb.go` / `monitor.go` | local, SSH-free status from WandB metrics + HF artifact freshness |
 | `claude-ping.example.json` | config template (copy to `claude-ping.json`, gitignored) |

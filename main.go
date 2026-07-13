@@ -30,6 +30,7 @@ Remote SSH driver (config: env PING_* > ./claude-ping.json > defaults):
   status             cat the heartbeat status.json (GPU/ckpt/log)
   gpu                one-shot nvidia-smi summary
   sync               rsync local_dir -> remote_dir (same tunnel)
+  env-sync           push secret env vars (secret_keys / local .env) -> remote_env_file (600)
   launch             run the configured launch_cmd in the background
   bootstrap          run the configured bootstrap_cmd
   shell              interactive shell (humans)
@@ -41,7 +42,11 @@ Remote-side heartbeat (env-driven; see 'heartbeat' section):
 SSH-free monitoring:
   monitor [flags]    WandB metrics + HF artifact freshness (no SSH)
 
+  version            print version and exit
   help               show this message`
+
+// version is set at build time via -ldflags "-X main.version=...".
+var version = "dev"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -54,6 +59,9 @@ func main() {
 	switch cmd {
 	case "help", "-h", "--help":
 		fmt.Println(usage)
+		return
+	case "version", "--version", "-v":
+		fmt.Printf("claude-ping %s\n", version)
 		return
 	case "heartbeat":
 		if err := runHeartbeat(); err != nil {
@@ -90,6 +98,8 @@ func main() {
 		err = d.gpu()
 	case "sync":
 		err = d.sync()
+	case "env-sync":
+		err = d.envSync()
 	case "launch":
 		err = d.launch()
 	case "bootstrap":

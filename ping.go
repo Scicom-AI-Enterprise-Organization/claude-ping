@@ -198,3 +198,73 @@ func (d *driver) sync() error {
 		return cmd.Run()
 	})
 }
+
+// envSync pushes selected secret/env variables to a file on the remote box (default
+// <remote_dir>/.env, mode 0600) over the persistent tunnel, so a launch_cmd /
+// bootstrap_cmd can `source` them. Values come from the process environment, with the
+// local .env filling in anything not already set. The file body is fed over stdin —
+// never the argv — so secret values never appear in the remote process list.
+func (d *driver) envSync() error {
+	dest := d.cfg.RemoteEnvFile
+	if dest == "" {
+		return fmt.Errorf("remote_env_file not set and remote_dir empty — nowhere to write")
+	}
+
+	loadDotenv() // local .env fills in vars not already in the environment
+
+	keys := d.cfg.SecretKeys
+	if len(keys) == 0 {
+		// No explicit list: sync every key defined in the local .env.
+		for _, kv := range dotenvPairs() {
+			keys = append(keys, kv[0])
+		}
+	}
+	if len(keys) == 0 {
+		return fmt.Errorf("nothing to sync: set secret_keys (or PING_SECRET_KEYS), or add a local .env")
+	}
+
+	var body strings.Builder
+	var synced, missing []string
+	seen := map[string]bool{}
+	for _, k := range keys {
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		if v, ok := os.LookupEnv(k); ok {
+			fmt.Fprintf(&body, "%s=%s\n", k, v)
+			synced = append(synced, k)
+		} else {
+			missing = append(missing, k)
+		}
+	}
+	if len(synced) == 0 {
+		return fmt.Errorf("none of the requested keys are set locally: %s", strings.Join(missing, ", "))
+	}
+
+	// umask 077 -> the created file is mode 0600; write via `cat` fed from stdin.
+	remoteCmd := "umask 077; f=" + shellQuote(dest) + `; mkdir -p "$(dirname "$f")" && cat > "$f" && chmod 600 "$f"`
+
+	fmt.Printf("[claude-ping] env-sync %d var(s) -> %s:%s (mode 600)\n", len(synced), d.hostspec, dest)
+	fmt.Printf("[claude-ping] keys: %s\n", strings.Join(synced, ", "))
+	if len(missing) > 0 {
+		fmt.Fprintf(os.Stderr, "[claude-ping] skipped (not set locally): %s\n", strings.Join(missing, ", "))
+	}
+	content := body.String()
+	return retry("env-sync", func() error { return d.runWithInput(remoteCmd, content) })
+}
+
+// runWithInput runs the remote command with stdin fed from `input` (used to pipe
+// secrets in without ever placing them on the argv, where remote `ps` could see them).
+func (d *driver) runWithInput(remoteCmd, input string) error {
+	cmd := exec.Command("ssh", d.sshArgs(remoteCmd)...)
+	cmd.Stdin = strings.NewReader(input)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// shellQuote single-quotes s for safe interpolation into a remote /bin/sh command.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}

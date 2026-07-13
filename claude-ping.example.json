@@ -15,6 +15,10 @@
 
   "sync_excludes": [".git", ".venv", "__pycache__", "*.pyc", "node_modules", "data", "*.ckpt", "*.pt", "*.bin", "*.zip"],
 
+  "//secrets": "`claude-ping env-sync` pushes these vars to remote_env_file (mode 600). Each value is read from your shell env, else from a local .env (see .env.example). Add any custom var name here. Leave secret_keys empty to sync EVERY key in .env instead.",
+  "secret_keys": ["WANDB_API_KEY", "HF_TOKEN", "MY_CUSTOM_SECRET"],
+  "remote_env_file": "/path/on/remote/repo/.env",
+
   "monitor": {
     "wandb_project": "my_project",
     "wandb_run": "run-name",
