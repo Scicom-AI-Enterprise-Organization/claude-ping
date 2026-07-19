@@ -64,6 +64,10 @@ claude-ping status             # cat the heartbeat status.json
 claude-ping gpu                # one-shot nvidia-smi summary
 claude-ping sync               # rsync local_dir -> remote_dir (same tunnel)
 claude-ping env-sync           # push secrets/env (secret_keys or local .env) to the remote
+claude-ping proxy 8000         # forward localhost:8000 -> remote:8000 over the master
+claude-ping proxy 9000:6006    # or remap: localhost:9000 -> remote:6006
+claude-ping proxy              # forward every port in proxy_ports at once
+claude-ping proxy-stop 8000    # cancel a forward (no args = all configured ports)
 claude-ping launch             # run the configured launch_cmd in the background
 claude-ping bootstrap          # run the configured bootstrap_cmd
 claude-ping down               # close the master when done
@@ -94,6 +98,33 @@ claude-ping env-sync
 ```bash
 # no config file needed — pick the vars inline:
 PING_SECRET_KEYS=WANDB_API_KEY,HF_TOKEN claude-ping env-sync
+```
+
+## Proxy remote ports to localhost
+
+Forward one or more remote ports to your laptop over the **same persistent master** —
+handy for hitting a remote web UI, TensorBoard, or an inference server as if it were local.
+Each forward is registered on the master with `ssh -O forward`, so the command returns
+immediately (no blocking session) and the tunnel keeps serving in the background.
+
+```bash
+claude-ping proxy 8000            # localhost:8000  -> remote localhost:8000
+claude-ping proxy 9000:6006       # localhost:9000  -> remote localhost:6006
+claude-ping proxy 8000 8888:8888  # several at once
+claude-ping proxy                 # forward every port in proxy_ports
+claude-ping proxy-stop 8000       # cancel one forward (no args = all configured)
+```
+
+- **Port spec** — `PORT` uses the same port both ends; `LOCAL:REMOTE` remaps.
+- **Which ports** — args if given, otherwise the `proxy_ports` list in `claude-ping.json`
+  (or `PING_PROXY_PORTS`, comma-separated).
+- **Auto-connect** — `proxy` opens the master first if it isn't up yet.
+- The remote side is reached via its own `localhost`, so services bound to `127.0.0.1`
+  on the remote box are reachable.
+
+```bash
+# no config file needed — pick the ports inline:
+PING_PROXY_PORTS=8000,9000:6006 claude-ping proxy
 ```
 
 ## Remote heartbeat

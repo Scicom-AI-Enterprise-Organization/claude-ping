@@ -31,6 +31,8 @@ Remote SSH driver (config: env PING_* > ./claude-ping.json > defaults):
   gpu                one-shot nvidia-smi summary
   sync               rsync local_dir -> remote_dir (same tunnel)
   env-sync           push secret env vars (secret_keys / local .env) -> remote_env_file (600)
+  proxy [ports...]   forward local->remote ports over the master (PORT or LOCAL:REMOTE)
+  proxy-stop [ports] cancel forwards added by 'proxy' (defaults to configured ports)
   launch             run the configured launch_cmd in the background
   bootstrap          run the configured bootstrap_cmd
   shell              interactive shell (humans)
@@ -100,6 +102,10 @@ func main() {
 		err = d.sync()
 	case "env-sync":
 		err = d.envSync()
+	case "proxy":
+		err = d.proxy(os.Args[2:])
+	case "proxy-stop":
+		err = d.proxyStop(os.Args[2:])
 	case "launch":
 		err = d.launch()
 	case "bootstrap":

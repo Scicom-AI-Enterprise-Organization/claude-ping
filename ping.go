@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -265,6 +266,119 @@ func (d *driver) envSync() error {
 	}
 	content := body.String()
 	return retry("env-sync", func() error { return d.runWithInput(remoteCmd, content) })
+}
+
+// portForward is a resolved local->remote TCP forward.
+type portForward struct {
+	local  string // local port
+	remote string // remote port (on the remote box's localhost)
+}
+
+func (f portForward) spec() string {
+	// -L localPort:localhost:remotePort — forward local:localPort to the remote's
+	// own loopback:remotePort, so a service bound to 127.0.0.1 remotely is reachable.
+	return f.local + ":localhost:" + f.remote
+}
+
+// parsePortSpec parses "PORT" (same port both ends) or "LOCAL:REMOTE".
+func parsePortSpec(s string) (portForward, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return portForward{}, fmt.Errorf("empty port spec")
+	}
+	parts := strings.Split(s, ":")
+	switch len(parts) {
+	case 1:
+		p := strings.TrimSpace(parts[0])
+		if !isPort(p) {
+			return portForward{}, fmt.Errorf("invalid port %q", s)
+		}
+		return portForward{local: p, remote: p}, nil
+	case 2:
+		l, r := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+		if !isPort(l) || !isPort(r) {
+			return portForward{}, fmt.Errorf("invalid port spec %q (want LOCAL:REMOTE)", s)
+		}
+		return portForward{local: l, remote: r}, nil
+	default:
+		return portForward{}, fmt.Errorf("invalid port spec %q (want PORT or LOCAL:REMOTE)", s)
+	}
+}
+
+func isPort(s string) bool {
+	if s == "" {
+		return false
+	}
+	n, err := strconv.Atoi(s)
+	return err == nil && n > 0 && n <= 65535
+}
+
+// resolvePorts turns the given specs (or the configured proxy_ports when empty)
+// into forwards.
+func (d *driver) resolvePorts(specs []string) ([]portForward, error) {
+	if len(specs) == 0 {
+		specs = d.cfg.ProxyPorts
+	}
+	if len(specs) == 0 {
+		return nil, fmt.Errorf("no ports: pass them as args or set proxy_ports / PING_PROXY_PORTS")
+	}
+	var fwds []portForward
+	for _, s := range specs {
+		f, err := parsePortSpec(s)
+		if err != nil {
+			return nil, err
+		}
+		fwds = append(fwds, f)
+	}
+	return fwds, nil
+}
+
+// proxy adds one or more local->remote port forwards to the persistent master.
+// Uses `ssh -O forward`, which registers the forward on the existing master and
+// returns immediately (no blocking session), so it fits the one-shot poll model.
+func (d *driver) proxy(specs []string) error {
+	fwds, err := d.resolvePorts(specs)
+	if err != nil {
+		return err
+	}
+	// -O forward needs a live master; open one if it isn't up yet.
+	if err := d.control("check"); err != nil {
+		if err := d.up(); err != nil {
+			return err
+		}
+	}
+	for _, f := range fwds {
+		if err := d.forwardControl("forward", f); err != nil {
+			return fmt.Errorf("could not forward %s: %w", f.spec(), err)
+		}
+		fmt.Printf("[claude-ping] proxy localhost:%s -> %s:localhost:%s\n", f.local, d.hostspec, f.remote)
+	}
+	return nil
+}
+
+// proxyStop cancels previously-added port forwards on the master.
+func (d *driver) proxyStop(specs []string) error {
+	fwds, err := d.resolvePorts(specs)
+	if err != nil {
+		return err
+	}
+	for _, f := range fwds {
+		if err := d.forwardControl("cancel", f); err != nil {
+			fmt.Fprintf(os.Stderr, "[claude-ping] could not cancel %s: %v\n", f.spec(), err)
+			continue
+		}
+		fmt.Printf("[claude-ping] proxy stopped localhost:%s\n", f.local)
+	}
+	return nil
+}
+
+// forwardControl runs `ssh -O <forward|cancel> -L <spec>` against the master.
+func (d *driver) forwardControl(op string, f portForward) error {
+	args := append([]string{}, d.sshOpts...)
+	args = append(args, "-O", op, "-L", f.spec(), d.hostspec)
+	cmd := exec.Command("ssh", args...)
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 // runWithInput runs the remote command with stdin fed from `input` (used to pipe

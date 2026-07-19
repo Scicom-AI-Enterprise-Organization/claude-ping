@@ -28,6 +28,7 @@ type Config struct {
 	SyncExcludes  []string
 	SecretKeys    []string
 	RemoteEnvFile string
+	ProxyPorts    []string
 
 	Monitor MonitorConfig
 
@@ -137,6 +138,11 @@ func LoadConfig() Config {
 	c.RemoteEnvFile = g("remote_env_file", "PING_REMOTE_ENV_FILE", "")
 	if c.RemoteEnvFile == "" && c.RemoteDir != "" {
 		c.RemoteEnvFile = c.RemoteDir + "/.env"
+	}
+
+	c.ProxyPorts = mapStrSlice(cfg, "proxy_ports", nil)
+	if v := os.Getenv("PING_PROXY_PORTS"); v != "" {
+		c.ProxyPorts = splitComma(v)
 	}
 
 	if mon, ok := cfg["monitor"].(map[string]any); ok {

@@ -19,6 +19,9 @@
   "secret_keys": ["WANDB_API_KEY", "HF_TOKEN", "MY_CUSTOM_SECRET"],
   "remote_env_file": "/path/on/remote/repo/.env",
 
+  "//proxy": "`claude-ping proxy` forwards these ports over the master. Use \"PORT\" for the same port both ends, or \"LOCAL:REMOTE\" to remap (e.g. \"9000:8000\").",
+  "proxy_ports": ["8000", "8888:8888", "9000:6006"],
+
   "monitor": {
     "wandb_project": "my_project",
     "wandb_run": "run-name",
