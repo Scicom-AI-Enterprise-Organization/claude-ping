@@ -74,10 +74,33 @@ claude-ping down               # close the master when done
 
 claude-ping monitor --history 8    # SSH-free: WandB metrics + HF artifact freshness
 claude-ping heartbeat              # remote-side: write status.json every N seconds
+
+# wait for a long job, then exit 0 — run it in the BACKGROUND so your agent
+# harness re-invokes you the moment the job is done ("pings you when done"):
+claude-ping watch --done-file /path/job.done          # done when the sentinel appears
+claude-ping watch --log-contains ALL_DONE --interval 2m
+claude-ping watch --no-proc train.py --timeout 6h     # done when the process exits
 ```
 
 `follow` (blocking `tail -f`) and `shell` (interactive) are for **humans**, not agents —
 agents should poll the one-shot verbs above.
+
+### `watch` — block until done, then ping
+
+`watch` is the one verb that intentionally blocks, but it never holds a streaming
+session: it runs a single one-shot probe every `--interval` (tunnel idle in between)
+and **exits 0 the instant the job is done**. Run it in the background so your agent
+harness wakes you with the result instead of polling by hand. Conditions (combine
+freely — **all** must hold):
+
+| flag | done when |
+|---|---|
+| `--done-file PATH` | a remote file exists (a job's `.done` sentinel) |
+| `--log-contains STR` | a fixed substring appears in `--log` (default: `train_log`) |
+| `--no-proc PATTERN` | no remote process matches `pgrep -f PATTERN` (job exited — self-match on the probe is excluded automatically) |
+
+Other flags: `--interval` (default 60s), `--timeout` (default 0 = forever; exits
+non-zero on timeout), `--tail N` (log lines to print on completion), `--label`, `--quiet`.
 
 ## Sync secrets / env to the remote
 

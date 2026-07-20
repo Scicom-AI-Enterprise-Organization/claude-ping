@@ -35,6 +35,8 @@ Remote SSH driver (config: env PING_* > ./claude-ping.json > defaults):
   proxy-stop [ports] cancel forwards added by 'proxy' (defaults to configured ports)
   launch             run the configured launch_cmd in the background
   bootstrap          run the configured bootstrap_cmd
+  watch [flags]      poll until a job is done, then exit 0 (run in background;
+                     --done-file / --log-contains / --no-proc, --interval, --timeout)
   shell              interactive shell (humans)
   follow [N]         tail -f (humans only — blocks; NOT for agents)
 
@@ -110,6 +112,8 @@ func main() {
 		err = d.launch()
 	case "bootstrap":
 		err = d.bootstrap()
+	case "watch":
+		err = d.watch(os.Args[2:])
 	case "shell":
 		err = d.shell()
 	case "follow":

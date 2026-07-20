@@ -84,11 +84,25 @@ file with `CLAUDE_PING_CONFIG=/path/to.json`.
 ./claude-ping bootstrap          # run the configured bootstrap_cmd
 ./claude-ping down               # close the master when done
 
+# BLOCK until a long job finishes, then exit 0 (run in the BACKGROUND: your agent
+# harness re-invokes you the instant it exits — claude-ping "pings you when done").
+# Polls one-shot every --interval (tunnel idle between polls — no streaming session).
+./claude-ping watch --done-file /work/job.done            # sentinel file appears
+./claude-ping watch --no-proc train.py --timeout 6h       # process exits
+./claude-ping watch --log-contains ALL_DONE --interval 2m # substring in train_log
+
 # SSH-FREE monitoring (WandB GraphQL + HuggingFace HTTP, no packages needed)
 ./claude-ping monitor --history 8
 ```
 
+`watch` conditions combine (all must hold): `--done-file`, `--log-contains` (in
+`--log`, default `train_log`), `--no-proc` (`pgrep -f` pattern; the probe's own
+self-match is excluded automatically). `--interval` 60s, `--timeout` 0=forever
+(non-zero exit on timeout), `--tail`, `--label`, `--quiet`.
+
 `follow` (blocking `tail -f`) and `shell` (interactive) exist for **humans**, not agents.
+`watch` blocks too, but only ever runs one-shot probes — it's the exception, meant to be
+backgrounded.
 
 ## Remote-side heartbeat
 
@@ -111,6 +125,7 @@ and self-exits once the watched process has been seen and is then gone.
 | `main.go` | CLI dispatch + usage |
 | `config.go` | resolve config (env `PING_*` > `claude-ping.json` > defaults) |
 | `ping.go` | persistent-SSH driver (`up/check/exec/logs/status/gpu/sync/env-sync/proxy/launch/bootstrap/shell/follow/down`) |
+| `watch.go` | `watch` verb: poll one-shot until a job is done (`--done-file/--log-contains/--no-proc`), then exit 0 |
 | `heartbeat.go` | remote-side: write `status.json` (GPU/ckpt/log/disk) every N seconds |
 | `hf.go` / `wandb.go` / `monitor.go` | local, SSH-free status from WandB metrics + HF artifact freshness |
 | `claude-ping.example.json` | config template (copy to `claude-ping.json`, gitignored) |
